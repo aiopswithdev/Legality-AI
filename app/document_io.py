@@ -41,21 +41,42 @@ def _extract_with_pdfplumber(pdf_bytes: bytes):
 # ------------------------------------------------
 # OCR fallback extraction
 # ------------------------------------------------
+import re
+
+def normalize_ocr_text(text: str) -> str:
+    # 1. Fix hyphenated line breaks (OCR classic)
+    # Example: "com-\npetition" → "competition"
+    text = re.sub(r"(\w)-\n(\w)", r"\1\2", text)
+
+    # 2. Normalize Windows/Mac line endings
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+
+    # 3. Collapse single newlines INSIDE paragraphs
+    # Keep double newlines (paragraph boundaries)
+    text = re.sub(r"(?<!\n)\n(?!\n)", " ", text)
+
+    # 4. Normalize excessive newlines (3+ → 2)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+
+    # 5. Normalize whitespace
+    text = re.sub(r"[ \t]+", " ", text)
+
+    return text.strip()
 
 def _extract_with_ocr(pdf_bytes: bytes):
     pages = []
-
     doc = fitz.open(stream=pdf_bytes, filetype="pdf")
 
     for i, page in enumerate(doc):
         pix = page.get_pixmap(dpi=OCR_RESOLUTION)
-        img = Image.frombytes(
-            "RGB",
-            [pix.width, pix.height],
-            pix.samples
+        img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+
+        text = pytesseract.image_to_string(
+            img,
+            config="--oem 3 --psm 6"
         )
 
-        text = pytesseract.image_to_string(img)
+        text = normalize_ocr_text(text)
 
         pages.append({
             "page_no": i + 1,
@@ -63,6 +84,27 @@ def _extract_with_ocr(pdf_bytes: bytes):
         })
 
     return pages
+# def _extract_with_ocr(pdf_bytes: bytes):
+#     pages = []
+
+#     doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+
+#     for i, page in enumerate(doc):
+#         pix = page.get_pixmap(dpi=OCR_RESOLUTION)
+#         img = Image.frombytes(
+#             "RGB",
+#             [pix.width, pix.height],
+#             pix.samples
+#         )
+
+#         text = pytesseract.image_to_string(img)
+
+#         pages.append({
+#             "page_no": i + 1,
+#             "text": text
+#         })
+
+#     return pages
 
 
 # ------------------------------------------------
