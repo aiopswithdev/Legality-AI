@@ -2,6 +2,10 @@
 FastAPI application for Legal Clause Risk Detection.
 Production-ready with CORS, health checks, error handling, and validation.
 """
+from app.analysis_cache import create_analysis_entry, get_analysis_entry
+from app.pdf_highlight import highlight_clauses_in_pdf
+from fastapi.responses import StreamingResponse
+import io
 
 from fastapi import FastAPI, UploadFile, File, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -339,11 +343,48 @@ async def analyze(
             f"Analysis complete for {file.filename}. "
             f"Found {len(result.get('clauses', []))} risky clauses."
         )
-        return result
+
+        analysis_id = create_analysis_entry(
+            pdf_bytes=pdf_bytes,
+            analysis_result=result
+        )
+
+        # return analysis_id + original response
+        return {
+            "analysis_id": analysis_id,
+            **result
+        }
+    
     except Exception as e:
         logger.error(f"Error processing document: {e}", exc_info=True)
         raise FileProcessingError(f"Failed to process document: {str(e)}")
 
+@app.get(
+    "/highlight/{analysis_id}",
+    tags=["Analysis"],
+    summary="Download highlighted PDF from cached analysis"
+)
+async def download_highlighted_pdf(analysis_id: str):
+    entry = get_analysis_entry(analysis_id)
+
+    if not entry:
+        raise HTTPException(
+            status_code=404,
+            detail="Analysis expired or not found. Please re-analyze."
+        )
+
+    highlighted_pdf = highlight_clauses_in_pdf(
+        pdf_bytes=entry["pdf_bytes"],
+        clauses=entry["result"].get("clauses", [])
+    )
+
+    return StreamingResponse(
+        io.BytesIO(highlighted_pdf),
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": "attachment; filename=highlighted_contract.pdf"
+        }
+    )
 
 # -------------------------------------------------
 # Root endpoint

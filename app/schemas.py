@@ -38,6 +38,7 @@ class LabelSummary(BaseModel):
 
 class DocumentAnalysisResponse(BaseModel):
     """Complete document analysis response."""
+    analysis_id: str
     document_risk: str = Field(..., description="Overall document risk level")
     label_summary: Dict[str, LabelSummary] = Field(..., description="Per-label risk summaries")
     clauses: List[ClauseResult] = Field(..., description="Detailed clause-level analysis results")
