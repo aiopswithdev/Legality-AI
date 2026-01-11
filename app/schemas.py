@@ -23,10 +23,11 @@ class ClauseResult(BaseModel):
     page_no: int = Field(..., description="Page number where clause was found")
     clause_text: str = Field(..., description="The extracted clause text")
     labels: List[LabelRisk] = Field(..., description="Risk assessments for this clause")
+    final_score: float = Field(..., ge=0.0, le=1.0, description="Weighted final risk score")
     identity: float = Field(..., ge=0.0, le=1.0, description="Identity match score")
     semantic: float = Field(..., ge=0.0, le=1.0, description="Semantic similarity score")
     margin: float = Field(..., description="Margin score")
-    top_matches: List[Dict[str, Any]] = Field(..., description="Top matching reference clauses")
+    # top_matches: List[Dict[str, Any]] = Field(..., description="Top matching reference clauses")
 
 
 class LabelSummary(BaseModel):
@@ -40,13 +41,16 @@ class DocumentAnalysisResponse(BaseModel):
     """Complete document analysis response."""
     analysis_id: str
     document_risk: str = Field(..., description="Overall document risk level")
+    doc_score: int = Field(..., description="Document risk score (average final_score * 10, rounded)")
     label_summary: Dict[str, LabelSummary] = Field(..., description="Per-label risk summaries")
     clauses: List[ClauseResult] = Field(..., description="Detailed clause-level analysis results")
 
     class Config:
         json_schema_extra = {
                 "example": {
+                    "analysis_id": '6c0dbc03-7f2b-4c85-a5cf-f10b34eef1eb',
                     "document_risk": "high_risk",
+                    "doc_score": 7,
                     "label_summary": {
                         "non_compete": {
                             "max_score": 0.85,
@@ -66,10 +70,11 @@ class DocumentAnalysisResponse(BaseModel):
                                     "band": "high"
                                 }
                             ],
+                            "final_score": 0.78,
                             "identity": 0.95,
                             "semantic": 0.82,
                             "margin": 0.15,
-                            "top_matches": []
+                            # "top_matches": []
                         }
                     ]
                 }

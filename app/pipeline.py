@@ -224,10 +224,11 @@ def analyze_clauses(chunks: List[Dict], dedup: bool = True) -> List[Dict]:
         raw_clauses.append({
             "page_no": chunk["page_no"],
             "clause_text": chunk["clause_text"],
+            "final_score": score_out["final_score"],
             "identity": score_out["identity"],
             "semantic": score_out["semantic"],
             "margin": score_out["margin"],
-            "top_matches": score_out["top_matches"],
+            # "top_matches": score_out["top_matches"],
             "labels": risky_labels
         })
 
@@ -247,18 +248,20 @@ def analyze_clauses(chunks: List[Dict], dedup: bool = True) -> List[Dict]:
         all_label_lists = [g["labels"] for g in group]
         merged_labels = _merge_labels(all_label_lists)
 
-        # choose best identity/semantic/margin by highest merged label score as heuristic
-        best_final = max((l["final_score"] for l in merged_labels), default=0.0)
         # pick representative clause (first)
         rep = group[0]
+        # Calculate clause-level final_score as max of original clause final_scores from the group
+        clause_final_score = max((g.get("final_score", 0.0) for g in group), default=rep.get("final_score", 0.0))
+        
         final_clauses.append({
             "page_no": rep["page_no"],
             "clause_text": rep["clause_text"],
+            "final_score": clause_final_score,
             "labels": merged_labels,
             "identity": rep["identity"],
             "semantic": rep["semantic"],
-            "margin": rep["margin"],
-            "top_matches": rep["top_matches"]
+            "margin": rep["margin"]
+            # "top_matches": rep["top_matches"]
         })
 
     # optional: sort final_clauses by descending highest label final_score
@@ -436,8 +439,8 @@ def analyze_document(pdf_bytes: bytes) -> Dict:
     pages = extract_pages_from_pdf_bytes(pdf_bytes)
 
     # 2. Chunk into clauses
-    chunks = nodedup =chunk_pages(pages)
-    chunks = dedup = deduplicate_chunks(chunks)
+    nodedup = chunk_pages(pages)
+    chunks = dedup = deduplicate_chunks(nodedup)
     logger.info(f"pages={len(pages)}, chunks_before_dedup={len(nodedup)}, chunks_after_dedup={len(dedup)}")
 
     # 3. Multi-label clause scoring
@@ -446,8 +449,16 @@ def analyze_document(pdf_bytes: bytes) -> Dict:
     # 4. Aggregate document risk
     doc_summary = aggregate_document_risk(clause_results)
 
+    # 5. Calculate doc_score: average of all clause final_scores * 10, rounded
+    if clause_results:
+        avg_final_score = sum(c.get("final_score", 0.0) for c in clause_results) / len(clause_results)
+        doc_score = round(avg_final_score * 10)
+    else:
+        doc_score = 0
+
     return {
         "document_risk": doc_summary["document_risk"],
+        "doc_score": doc_score,
         "label_summary": doc_summary["label_summary"],
         "clauses": clause_results
     }

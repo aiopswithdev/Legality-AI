@@ -349,7 +349,7 @@ async def analyze(
             analysis_result=result
         )
 
-        # return analysis_id + original response
+        # return analysis_id + original response (includes doc_score)
         return {
             "analysis_id": analysis_id,
             **result
